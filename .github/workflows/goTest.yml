@@ -4,20 +4,22 @@ jobs:
   test:
     strategy:
       matrix:
-        go-version: [1.18.x, 1.19.x]
+        go-version: [1.19.x, 1.20.x]
         platform: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.platform }}
     steps:
     - name: Install Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version: ${{ matrix.go-version }}
+        check-latest: true
+        cache-dependency-path: go.sum
     - name: Set git on win to use LF
       run: |
         git config --global core.autocrlf false
         git config --global core.eol lf
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Test
       run: go test ./...
       env:
@@ -26,7 +28,7 @@ jobs:
   test-oniguruma:
     strategy:
       matrix:
-        go-version: [1.18.x, 1.19.x]
+        go-version: [1.19.x, 1.20.x]
     runs-on: ubuntu-latest
     env:
       ONIGURUMA_VERSION: 6.9.4

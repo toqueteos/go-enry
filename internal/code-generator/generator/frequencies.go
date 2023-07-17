@@ -2,6 +2,7 @@ package generator
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -10,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"text/template"
 
@@ -46,6 +46,14 @@ func Frequencies(fileToParse, samplesDir, outPath, tmplPath, tmplName, commit st
 		for _, k := range keys {
 			fmt.Printf(" %s: %d\n", k, freqs.Languages[k])
 		}
+	}
+
+	if err := writeLanguagesLogProbabilitiesFile(freqs, outPath); err != nil {
+		return err
+	}
+
+	if err := writeTokensLogProbabilitiesFile(freqs, outPath); err != nil {
+		return err
 	}
 
 	buf := &bytes.Buffer{}
@@ -167,36 +175,74 @@ func getTokens(samples []string) ([]string, error) {
 	return tokens, anyError
 }
 
+func writeLanguagesLogProbabilitiesFile(freqs *samplesFrequencies, filename string) error {
+	datafilePath := filename + ".languages.json"
+	f, err := os.Create(datafilePath)
+	if err != nil {
+		return fmt.Errorf("could not create %q: %w", datafilePath, err)
+	}
+	defer f.Close()
+
+	languageLogProbability := func(language string) float64 {
+		return math.Log(float64(freqs.Languages[language]) / float64(freqs.LanguageTotal))
+	}
+
+	probabilities := make(map[string]float64)
+	for _, language := range orderKeys(freqs.Languages) {
+		probabilities[language] = languageLogProbability(language)
+	}
+
+	enc := json.NewEncoder(f)
+	return enc.Encode(probabilities)
+}
+
+func writeTokensLogProbabilitiesFile(freqs *samplesFrequencies, filename string) error {
+	datafilePath := filename + ".tokens.json"
+	f, err := os.Create(datafilePath)
+	if err != nil {
+		return fmt.Errorf("could not create %q: %w", datafilePath, err)
+	}
+	defer f.Close()
+
+	tokenLogProbability := func(language, token string) float64 {
+		num := math.Log(float64(freqs.Tokens[language][token]) / float64(freqs.LanguageTokens[language]))
+		return num
+	}
+
+	probabilities := make(map[string]map[string]float64)
+	for _, language := range orderMapMapKeys(freqs.Tokens) {
+		probabilitiesByToken := make(map[string]float64)
+		for _, token := range orderKeys(freqs.Tokens[language]) {
+			probabilitiesByToken[token] = tokenLogProbability(language, token)
+		}
+		probabilities[language] = probabilitiesByToken
+	}
+
+	enc := json.NewEncoder(f)
+	return enc.Encode(probabilities)
+}
+
 func executeFrequenciesTemplate(out io.Writer, freqs *samplesFrequencies, tmplPath, tmplName, commit string) error {
 	fmap := template.FuncMap{
 		"toFloat64": func(num int) string { return fmt.Sprintf("%f", float64(num)) },
-		"orderKeys": func(m map[string]int) []string {
-			keys := make([]string, 0, len(m))
-			for key := range m {
-				keys = append(keys, key)
-			}
-
-			sort.Strings(keys)
-			return keys
-		},
-		"languageLogProbability": func(language string) string {
-			num := math.Log(float64(freqs.Languages[language]) / float64(freqs.LanguageTotal))
-			return fmt.Sprintf("%f", num)
-		},
-		"orderMapMapKeys": func(mm map[string]map[string]int) []string {
-			keys := make([]string, 0, len(mm))
-			for key := range mm {
-				keys = append(keys, key)
-			}
-
-			sort.Strings(keys)
-			return keys
-		},
-		"tokenLogProbability": func(language, token string) string {
-			num := math.Log(float64(freqs.Tokens[language][token]) / float64(freqs.LanguageTokens[language]))
-			return fmt.Sprintf("%f", num)
-		},
-		"quote": strconv.Quote,
 	}
 	return executeTemplate(out, tmplName, tmplPath, commit, fmap, freqs)
+}
+
+func orderKeys(m map[string]int) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func orderMapMapKeys(mm map[string]map[string]int) []string {
+	keys := make([]string, 0, len(mm))
+	for key := range mm {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

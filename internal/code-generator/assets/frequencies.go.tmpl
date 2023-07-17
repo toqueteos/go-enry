@@ -1,20 +1,22 @@
 package data
 
-var LanguagesLogProbabilities = map[string]float64{
-	{{ $freqs := . -}}
-	{{range $index, $language := orderKeys .Languages -}}
-		"{{ $language }}":	{{ languageLogProbability $language -}},
-	{{end -}}
+import (
+	_ "embed"
+	"encoding/json"
+)
+
+//go:embed frequencies.go.languages.json
+var languages []byte
+//go:embed frequencies.go.tokens.json
+var tokens []byte
+
+func init() {
+	json.Unmarshal(languages, &LanguagesLogProbabilities)
+	json.Unmarshal(tokens, &TokensLogProbabilities)
 }
 
-var TokensLogProbabilities = map[string]map[string]float64{
-	{{range $index, $language := orderMapMapKeys .Tokens -}}
-		"{{ $language }}": map[string]float64{
-		{{range $i, $token := index $freqs.Tokens $language | orderKeys -}}
-			{{ quote $token }}: {{ tokenLogProbability $language $token }},
-		{{end -}}
-		},
-	{{end -}}
-}
+var LanguagesLogProbabilities = map[string]float64{}
+
+var TokensLogProbabilities = map[string]map[string]float64{}
 
 var TokensTotal = {{ toFloat64 .TokensTotal -}}

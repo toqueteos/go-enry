@@ -2,8 +2,11 @@ package generator
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 
 	"gopkg.in/yaml.v2"
 )
@@ -29,8 +32,12 @@ func Types(fileToParse, samplesDir, outPath, tmplPath, tmplName, commit string) 
 
 	langTypeMap := buildLanguageTypeMap(languages)
 
+	if err := writeTypesFile(langTypeMap, outPath); err != nil {
+		return err
+	}
+
 	buf := &bytes.Buffer{}
-	if err := executeTypesTemplate(buf, langTypeMap, tmplPath, tmplName, commit); err != nil {
+	if err := executeTypesTemplate(buf, tmplPath, tmplName, commit); err != nil {
 		return err
 	}
 
@@ -46,6 +53,18 @@ func buildLanguageTypeMap(languages map[string]*languageInfo) map[string]int {
 	return langTypeMap
 }
 
-func executeTypesTemplate(out io.Writer, langTypeMap map[string]int, tmplPath, tmplName, commit string) error {
-	return executeTemplate(out, tmplName, tmplPath, commit, nil, langTypeMap)
+func writeTypesFile(types map[string]int, filename string) error {
+	datafilePath := filename + ".json"
+	f, err := os.Create(datafilePath)
+	if err != nil {
+		return fmt.Errorf("could not create %q: %w", datafilePath, err)
+	}
+	defer f.Close()
+
+	enc := json.NewEncoder(f)
+	return enc.Encode(types)
+}
+
+func executeTypesTemplate(out io.Writer, tmplPath, tmplName, commit string) error {
+	return executeTemplate(out, tmplName, tmplPath, commit, nil, nil)
 }
